@@ -1,0 +1,12 @@
+# Ignore everything
+*
+
+# Except for .ipynb and .py files
+!*.ipynb
+!*.py
+!*.xlsx
+!*.gitignore
+!*.ods
+!*.yaml
+!*.pyc
+!*.sh
