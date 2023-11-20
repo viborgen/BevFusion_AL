@@ -1,10 +1,3 @@
-import numpy as np
-import torch
-
-
-from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
-
-
 from typing import Dict, List
 import orjson as json
 import random
@@ -15,7 +8,6 @@ import sys
 
 train_path = '/cvrr/bevfusion_bjork/data/nuscenes/v1.0-trainval'
 test_path = '/cvrr/bevfusion_bjork/data/nuscenes/v1.0-test'
-u_path = '/cvrr/bevfusion_bjork/data/nuscenes/v1.0-unlabeled'
 
 #from nuscenes import NuScenes
 
@@ -170,7 +162,7 @@ def file_collector():
     # Save the combined data to a new JSON file
     with open('tools/json_map/combined_scene.json', 'wb') as json_file:
         #json.dumps(combined_data, json_file, indent=0)
-        json_file.write(json.dumps(combined_data, option=json.OPT_INDENT_2))
+        json_file.write(json.dumps(combined_data, option=json.OPT_SORT_KEYS))
 
 
 
@@ -189,12 +181,11 @@ def orig_split(random_num = 100):
     # List of labels you want to avoid
     avoid_labels = [item['name'] for item in prior_data]
 
-#___________________________________________random sampling __________________________________________________________-
     # Generate a list of random labels not present in the existing data
     random_labels = list(set(init_train) - set(avoid_labels))
 
     train = random.sample(list(random_labels), random_num)
-#_______________________________________________________________________________________________________________________
+
 
     for scene in init_train:
         if scene not in train:
@@ -202,6 +193,8 @@ def orig_split(random_num = 100):
                 unlabeled.append(scene)
 
 
+    test = list(sorted(set(init_test + unlabeled)))
+    
     val = list(sorted(set(init_val)))
     
 
@@ -214,7 +207,7 @@ def orig_split(random_num = 100):
     #     existing_data = json.load(json_file)
 
      # Load existing JSON data from the file
-    with open(os.path.join(test_path, 'orig_scene.json'), 'r') as json_file:
+    with open('/cvrr/bevfusion_bjork/data/nuscenes/v1.0-test/orig_scene.json', 'r') as json_file:
         existing_data_testing = json.loads(json_file.read())
 
     #__________________________________________train split_________________________________________________________
@@ -267,21 +260,21 @@ def orig_split(random_num = 100):
     #__________________________________________unlabeled split_________________________________________________________
 
 
-    selected_data_unlabeled = []
-    # Find related samples for each token in the tokens list
-    for item in existing_data:
-        if item.get('name') in unlabeled:
-            selected_data_unlabeled.append(item)
+    # selected_data_unlabeled = []
+    # # Find related samples for each token in the tokens list
+    # for item in existing_data:
+    #     if item.get('name') in unlabeled:
+    #         selected_data_unlabeled.append(item)
             
-    # If the object with the specified name token is found, save it to a new JSON file
-    if selected_data_unlabeled:
-        with open('tools/json_map/unlabeled.json', 'wb') as output_file:
-            #json.dumps(selected_data_test, output_file, indent=0)
-            output_file.write(json.dumps(selected_data_unlabeled, option=json.OPT_SORT_KEYS))
-            #print(f"Object with name '{test}' saved to test.json")
-    else:
-        print(f"Object with name '{unlabeled}' not found in the data.")
-    print("unlabeled: ", len(selected_data_unlabeled))
+    # # If the object with the specified name token is found, save it to a new JSON file
+    # if selected_data_unlabeled:
+    #     with open('tools/json_map/unlabeled.json', 'wb') as output_file:
+    #         #json.dumps(selected_data_test, output_file, indent=0)
+    #         output_file.write(json.dumps(selected_data_unlabeled, option=json.OPT_SORT_KEYS))
+    #         #print(f"Object with name '{test}' saved to test.json")
+    # else:
+    #     print(f"Object with name '{unlabeled}' not found in the data.")
+    # print("unlabeled: ", len(selected_data_unlabeled))
 
 
     #__________________________________________test split_________________________________________________________
@@ -289,8 +282,8 @@ def orig_split(random_num = 100):
 
     selected_data_test= []
     # Find related samples for each token in the tokens list
-    for item in existing_data_testing:
-        if item.get('name') in init_test:
+    for item in existing_data:
+        if item.get('name') in test:
             selected_data_test.append(item)
             
     # If the object with the specified name token is found, save it to a new JSON file
@@ -305,36 +298,6 @@ def orig_split(random_num = 100):
 
 
 
-
-# def entropy(probs):
-#     return -torch.sum(probs * torch.log(probs), dim=-1)
-
-# def active_learning_query(model, unlabeled_loader):
-#     model.eval()
-#     entropy_scores = []
-
-#     with torch.no_grad():
-#         for data in unlabeled_loader:
-#             # Assuming data is a batch of images
-#             images = data['image'].cuda()
-
-#             # Get the model's output probabilities
-#             output_probs = torch.nn.functional.softmax(model(images), dim=-1)
-
-#             # Calculate the entropy of the output probabilities
-#             batch_entropy_scores = entropy(output_probs)
-
-#             entropy_scores.append(batch_entropy_scores)
-
-#     # Concatenate the entropy scores from all batches
-#     entropy_scores = torch.cat(entropy_scores)
-
-#     # Get the indices of the data points with the highest entropy
-#     query_indices = np.argsort(entropy_scores.cpu().numpy())[::-1]
-
-#     return query_indices
-
-
 def scene_organicer():
     # Load existing JSON data from the file
     with open('tools/json_map/train.json', 'r') as json_file:
@@ -343,10 +306,6 @@ def scene_organicer():
      # Load existing JSON data from the file
     with open('tools/json_map/val.json', 'r') as json_file:
         existing_data_val = json.loads(json_file.read())
-
-    # Load existing JSON data from the file
-    with open('tools/json_map/unlabeled.json', 'r') as json_file:
-        existing_data_u = json.loads(json_file.read())
     
     # Combine the data into a new list
     combined_data = existing_data_trainval + existing_data_val
@@ -360,14 +319,6 @@ def scene_organicer():
         json_file.write(json.dumps(combined_data, option=json.OPT_SORT_KEYS))
 
     print('trainval scenes created')
-
-    # Save the combined data to a new JSON file
-    with open(os.path.join(u_path, 'scene.json'), 'wb') as json_file:
-        #json.dumps(existing_data_test, json_file, indent=0)
-        json_file.write(json.dumps(existing_data_u, option=json.OPT_SORT_KEYS))
-
-    print('U scenes created')
-
 
      # Load existing JSON data from the file
     with open('tools/json_map/test.json', 'r') as json_file:
@@ -399,24 +350,9 @@ def sample_organicer():
         for sample in samples_data:
             if sample['scene_token'] in scene_tokens:
                 filtered_samples_train.append(sample)
-            # else:
-            #     other_samples_train.append(sample)
+            else:
+                other_samples_train.append(sample)
 
-    # Step 1: Read data from scene.json and extract scene tokens
-    with open(os.path.join(u_path, 'scene.json'), 'r') as f:
-        scene_data = json.loads(f.read())
-        scene_tokens = [scene['token'] for scene in scene_data]
-
-    # Step 2: Read data from samples.json and filter samples by scene tokens
-    with open(os.path.join(train_path, 'orig_sample.json'), 'r') as f:
-        samples_data = json.loads(f.read())
-        filtered_samples_u = []
-        other_samples_u = []
-        for sample in samples_data:
-            if sample['scene_token'] in scene_tokens:
-                filtered_samples_u.append(sample)
-            # else:
-            #     other_samples_u.append(sample)
     
 
     # Step 1: Read data from scene.json and extract scene tokens
@@ -432,32 +368,24 @@ def sample_organicer():
         for sample in samples_data:
             if sample['scene_token'] in scene_tokens:
                 filtered_samples_test.append(sample)
-            # else:
-            #     other_samples_test.append(sample)
+            else:
+                other_samples_test.append(sample)
 
-    train = filtered_samples_train
-    u = filtered_samples_u 
-    test = filtered_samples_test
+    train = filtered_samples_train + other_samples_test
+    test = filtered_samples_test + other_samples_train
 
     # Step 3: Save the filtered samples into a new JSON file
     with open(os.path.join(train_path, 'sample.json'), 'wb') as f:
         #json.dumps(train, f, indent=0)
         f.write(json.dumps(train, option=json.OPT_SORT_KEYS))
-        print("Filtered samples have been saved to samples.json in train path")
-
-    
-    # Step 3: Save the filtered samples into a new JSON file
-    with open(os.path.join(u_path, 'sample.json'), 'wb') as f:
-        #json.dumps(train, f, indent=0)
-        f.write(json.dumps(u, option=json.OPT_SORT_KEYS))
-        print("Filtered samples have been saved to samples.json in U path")
+        print("Filtered samples have been saved to samples.json")
 
    
     # Step 4: Save the other samples into another JSON file
     with open(os.path.join(test_path, 'sample.json'), 'wb') as f:
         #json.dumps(test, f, indent=0)
         f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
-        print("Other samples have been saved to other_samples.json in test path")
+        print("Other samples have been saved to other_samples.json")
 
 
 from tqdm import tqdm
@@ -480,36 +408,13 @@ def sample_data_organicer():
             if sample['sample_token'] in sample_tokens:
                 filtered_samples_train.append(sample)
 
-        # for sample in tqdm(sample_data, desc="Processing Other Samples Train", unit=" samples"):
-        #     if sample['sample_token'] not in sample_tokens:
-        #         other_samples_train.append(sample)
+        for sample in tqdm(sample_data, desc="Processing Other Samples Train", unit=" samples"):
+            if sample['sample_token'] not in sample_tokens:
+                other_samples_train.append(sample)
 
+        #other_samples_train = [sample for sample in tqdm(sample_data, desc="Processing Other Samples Train", unit=" samples") if sample not in filtered_samples_train]
 
-    print('train path sample_data created')
-
-
-    # Step 1: Read data from scene.json and extract scene tokens
-    with open(os.path.join(u_path, 'sample.json'), 'r') as f:
-        sample_data = json.loads(f.read())
-        sample_tokens = [sample['token'] for sample in sample_data]
-
-    # Step 2: Read data from samples.json and filter samples by scene tokens
-    with open(os.path.join(train_path, 'orig_sample_data.json'), 'r') as f:
-        sample_data = json.loads(f.read())
-        filtered_samples_u = []
-        other_samples_u = []
-
-        # Use tqdm to create a progress bar
-        for sample in tqdm(sample_data, desc="Processing Samples U", unit=" samples"):
-            if sample['sample_token'] in sample_tokens:
-                filtered_samples_u.append(sample)
-
-        # for sample in tqdm(sample_data, desc="Processing Other Samples U", unit=" samples"):
-        #     if sample['sample_token'] not in sample_tokens:
-        #         other_samples_u.append(sample)
-
-
-    print('U path sample_data created')
+    print("DONE1")
 
     # Step 1: Read data from scene.json and extract scene tokens
     with open(os.path.join(test_path, 'sample.json'), 'r') as f:
@@ -529,33 +434,26 @@ def sample_data_organicer():
 
         #other_samples_test = [sample for sample in tqdm(sample_data, desc="Processing Other Samples Test", unit=" samples") if sample not in filtered_samples_test]
 
-        # for sample in tqdm(sample_data, desc="Processing Other Samples Test", unit=" samples"):
-        #     if sample['sample_token'] not in sample_tokens:
-        #         other_samples_test.append(sample)
+        for sample in tqdm(sample_data, desc="Processing Other Samples Test", unit=" samples"):
+            if sample['sample_token'] not in sample_tokens:
+                other_samples_test.append(sample)
 
-    train = filtered_samples_train
-    u = filtered_samples_u 
-    test = filtered_samples_test
-    print('test path sample_data created')
+    train = filtered_samples_train + other_samples_test
+    test = filtered_samples_test + other_samples_train
+    print("DONE2")
 
     # Step 3: Save the filtered samples into a new JSON file
     with open(os.path.join(train_path, 'sample_data.json'), 'wb') as f:
         # json.dumps(train, f, indent=0)
         f.write(json.dumps(train, option=json.OPT_SORT_KEYS))
-        print("Filtered samples have been saved to samples_data.json")
-
-    # Step 3: Save the filtered samples into a new JSON file
-    with open(os.path.join(u_path, 'sample_data.json'), 'wb') as f:
-        # json.dumps(train, f, indent=0)
-        f.write(json.dumps(u, option=json.OPT_SORT_KEYS))
-        print("Filtered samples have been saved to samples_data.json")
+        print("Filtered samples have been saved to samples.json")
 
     # Step 4: Save the other samples into another JSON file
     with open(os.path.join(test_path, 'sample_data.json'), 'wb') as f:
         # json.dumps(test, f, indent=0)
         f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
-        print("Other samples have been saved to samples_data.json")
-    print("Done with sample data")
+        print("Other samples have been saved to other_samples.json")
+    print("DONE3")
 
 
 
@@ -577,47 +475,17 @@ def ann_data_organicer():
             if sample['sample_token'] in sample_tokens:
                 filtered_samples_train.append(sample)
 
-        # for sample in tqdm(sample_data, desc="Processing Other Annotations Train", unit=" samples"):
-        #     if sample['sample_token'] not in sample_tokens:
-        #         other_samples_train.append(sample)
+        for sample in tqdm(sample_data, desc="Processing Other Annotations Train", unit=" samples"):
+            if sample['sample_token'] not in sample_tokens:
+                other_samples_train.append(sample)
 
-
-    # Step 1: Read data from scene.json and extract scene tokens
-    with open(os.path.join(u_path, 'sample.json'), 'r') as f:
-        sample_data = json.loads(f.read())
-        sample_tokens = [sample['token'] for sample in sample_data]
-
-    # Step 2: Read data from samples.json and filter samples by scene tokens
-    with open(os.path.join(train_path, 'orig_sample_annotation.json'), 'r') as f:
-        sample_data = json.loads(f.read())
-        filtered_samples_u = []
-        other_samples_u = []
-
-        # Use tqdm to create a progress bar
-        for sample in tqdm(sample_data, desc="Processing Annotation U", unit=" samples"):
-            if sample['sample_token'] in sample_tokens:
-                filtered_samples_u.append(sample)
-
-        # for sample in tqdm(sample_data, desc="Processing Other Annotations U", unit=" samples"):
-        #     if sample['sample_token'] not in sample_tokens:
-        #         other_samples_u.append(sample)
-
-
-    train = filtered_samples_train
-    u = filtered_samples_u
     
 
     # Step 3: Save the filtered samples into a new JSON file
     with open(os.path.join(train_path, 'sample_annotation.json'), 'wb') as f:
         #json.dumps(filtered_samples_train, f, indent=0)
-        f.write(json.dumps(train, option=json.OPT_SORT_KEYS))
-        print("annotaions have been saved to samples_annotation.json in train folder")
-
-    # Step 3: Save the filtered samples into a new JSON file
-    with open(os.path.join(u_path, 'sample_annotation.json'), 'wb') as f:
-        #json.dumps(filtered_samples_train, f, indent=0)
-        f.write(json.dumps(u, option=json.OPT_SORT_KEYS))
-        print("annotaions have been saved to samples_annotation.json in U folder")
+        f.write(json.dumps(filtered_samples_train, option=json.OPT_SORT_KEYS))
+        print("Filtered samples have been saved to samples_annotation.json")
 
 
 def file_gatherer(file):
@@ -647,12 +515,6 @@ def file_gatherer(file):
             f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
             print(f"{file}.json saved to test folder")
 
-        # Step 4: Save the other samples into another JSON file
-        with open(os.path.join(u_path, 'calibrated_sensor.json'), 'wb') as f:
-            #json.dumps(test, f, indent=0)
-            f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
-            print(f"{file}.json saved to U folder")
-
     elif j == 1: 
     # Step 3: Save the filtered samples into a new JSON file
         with open(os.path.join(train_path, 'log.json'), 'wb') as f:
@@ -666,12 +528,6 @@ def file_gatherer(file):
             #json.dumps(test, f, indent=0)
             f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
             print(f"{file}.json saved to test folder")
-
-        # Step 4: Save the other samples into another JSON file
-        with open(os.path.join(u_path, 'log.json'), 'wb') as f:
-            #json.dumps(test, f, indent=0)
-            f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
-            print(f"{file}.json saved to U folder")
 
     else:
         # Step 3: Save the filtered samples into a new JSON file
@@ -687,13 +543,7 @@ def file_gatherer(file):
             f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
             print(f"{file}.json saved to test folder")
 
-        # Step 4: Save the other samples into another JSON file
-        with open(os.path.join(u_path, 'ego_pose.json'), 'wb') as f:
-            #json.dumps(test, f, indent=0)
-            f.write(json.dumps(test, option=json.OPT_SORT_KEYS))
-            print(f"{file}.json saved to U folder")
-
-    print("\n")
+    print(j)
     j += 1
     
         
@@ -709,13 +559,11 @@ def run(scenes):
     for file in files:
         file_gatherer(file)
     ann_data_organicer()
-
-    print("finished...")
         
     command1 = 'python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes'
-    command2 = 'torchpack dist-run -np 1 python tools/train.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml'
+    command2 = 'torchpack dist-run -np 1 python tools/train.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml --model.encoders.camera.backbone.init_cfg.checkpoint ./pretrained/swint-nuimages-pretrained.pth'
     command3 = 'torchpack dist-run -np 1 python tools/1test.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml ./pretrained/swint-nuimages-pretrained.pth --eval bbox'
-    # #commands = ['command1', 'command2', 'command3']
+    #commands = ['command1', 'command2', 'command3']
 
     
     #     # # Use Popen to run the command and capture the output
@@ -781,6 +629,7 @@ with open('tools/json_map/train.json', 'wb') as output_file:
 #run original split
 run(100)
 
-# #random samples added per Active Learning round
-# for i in range(0, 4):
-#     run(50)
+#random samples added per Active Learning round
+for i in range(0, 4):
+    run(50)
+    
