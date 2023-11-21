@@ -143,7 +143,7 @@ def main():
     wandb.init(
         project="BEV-active-Learning",
         name="test",
-        entity="viborgen",
+        entity="ricenet",
         config=cfg._cfg_dict,
         sync_tensorboard=True,
     )

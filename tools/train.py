@@ -39,10 +39,11 @@ def main():
         wandb.init(
             project="BEV-active-Learning",
             name="train",
-            entity="viborgen",
+            entity="ricenet",
             config=cfg._cfg_dict,
             sync_tensorboard=True,
             group="train",
+            step=cfg.max_epochs,
         )
 
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
@@ -97,6 +98,7 @@ def main():
         validate=True,
         timestamp=timestamp,
     )
+    
 
 
 if __name__ == "__main__":

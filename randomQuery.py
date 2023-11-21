@@ -13,9 +13,9 @@ import os
 import subprocess
 import sys
 
-train_path = '/cvrr/bevfusion_bjork/data/nuscenes/v1.0-trainval'
-test_path = '/cvrr/bevfusion_bjork/data/nuscenes/v1.0-test'
-u_path = '/cvrr/bevfusion_bjork/data/nuscenes/v1.0-unlabeled'
+train_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-trainval'
+test_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-test'
+u_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-unlabeled'
 
 #from nuscenes import NuScenes
 
@@ -193,7 +193,12 @@ def orig_split(random_num = 100):
     # Generate a list of random labels not present in the existing data
     random_labels = list(set(init_train) - set(avoid_labels))
 
-    train = random.sample(list(random_labels), random_num)
+    # Take the minimum of random_num and the length of random_labels
+    num_samples = min(random_num, len(random_labels))
+
+    train = random.sample(list(random_labels), num_samples)
+
+    #train = random.sample(list(random_labels), random_num)
 #_______________________________________________________________________________________________________________________
 
     for scene in init_train:
@@ -696,7 +701,21 @@ def file_gatherer(file):
     print("\n")
     j += 1
     
-        
+
+def run_latest_model():
+    # Get a list of all directories in the directory
+    dirs = [d for d in os.listdir('./checkpoints') if os.path.isdir(os.path.join('./checkpoints', d))]
+
+    # Sort the directories by modification time
+    dirs.sort(key=lambda x: os.path.getmtime(os.path.join('./checkpoints', x)))
+
+    # Get the latest directory
+    latest_dir = dirs[-1]
+
+    return latest_dir
+
+
+      
 
 def run(scenes):
     global j
@@ -711,11 +730,11 @@ def run(scenes):
     ann_data_organicer()
 
     print("finished...")
-        
+    latest = run_latest_model()
     command1 = 'python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes'
     command2 = 'torchpack dist-run -np 1 python tools/train.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml'
-    command3 = 'torchpack dist-run -np 1 python tools/1test.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml ./pretrained/swint-nuimages-pretrained.pth --eval bbox'
-    # #commands = ['command1', 'command2', 'command3']
+    command3 = f'torchpack dist-run -np 1 python tools/1test.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml ./checkpoints/{latest}/latest.pth --eval bbox'
+    # # #commands = ['command1', 'command2', 'command3']
 
     
     #     # # Use Popen to run the command and capture the output
@@ -751,6 +770,7 @@ def run(scenes):
         print(f"Error: Command '{command2}' failed with return code {return_code}")
         sys.exit(1)  # Stop the loop if an error occurred
 
+    
 
     # # Use Popen to run the command and capture the output
     process = subprocess.Popen(command3, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
@@ -782,5 +802,5 @@ with open('tools/json_map/train.json', 'wb') as output_file:
 run(100)
 
 # #random samples added per Active Learning round
-# for i in range(0, 4):
-#     run(50)
+for i in range(0, 4):
+    run(50)
