@@ -3,6 +3,7 @@ import torch
 
 
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
+from tools.queryMethods import randomQ, entropyQ
 
 
 from typing import Dict, List
@@ -16,6 +17,7 @@ import sys
 train_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-trainval'
 test_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-test'
 u_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-unlabeled'
+cfg = './configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml'
 
 #from nuscenes import NuScenes
 
@@ -174,7 +176,7 @@ def file_collector():
 
 
 
-def orig_split(random_num = 100):
+def orig_split(AL_split = 100, query = "random", first_round = False):
     unlabeled =[] #list(sorted(set(init_train_detect + init_train_track)))
 
     try:
@@ -189,14 +191,24 @@ def orig_split(random_num = 100):
     # List of labels you want to avoid
     avoid_labels = [item['name'] for item in prior_data]
 
-#___________________________________________random sampling __________________________________________________________-
+#___________________________________________sampling __________________________________________________________-
     # Generate a list of random labels not present in the existing data
-    random_labels = list(set(init_train) - set(avoid_labels))
+    labels = list(set(init_train) - set(avoid_labels))
 
-    # Take the minimum of random_num and the length of random_labels
-    num_samples = min(random_num, len(random_labels))
+    if query == "random":
 
-    train = random.sample(list(random_labels), num_samples)
+        train = randomQ(AL_split, labels)
+
+    elif query == "entropy":
+        if first_round == True:
+            train = randomQ(AL_split, labels)
+        else:
+            train = entropyQ(AL_split, cfg)
+
+    # # Take the minimum of random_num and the length of random_labels
+    # num_samples = min(random_num, len(random_labels))
+
+    # train = random.sample(list(random_labels), num_samples)
 
     #train = random.sample(list(random_labels), random_num)
 #_______________________________________________________________________________________________________________________
@@ -308,36 +320,6 @@ def orig_split(random_num = 100):
         print(f"Object with name '{init_test}' not found in the data.")
     print("test: ", len(selected_data_test))
 
-
-
-
-# def entropy(probs):
-#     return -torch.sum(probs * torch.log(probs), dim=-1)
-
-# def active_learning_query(model, unlabeled_loader):
-#     model.eval()
-#     entropy_scores = []
-
-#     with torch.no_grad():
-#         for data in unlabeled_loader:
-#             # Assuming data is a batch of images
-#             images = data['image'].cuda()
-
-#             # Get the model's output probabilities
-#             output_probs = torch.nn.functional.softmax(model(images), dim=-1)
-
-#             # Calculate the entropy of the output probabilities
-#             batch_entropy_scores = entropy(output_probs)
-
-#             entropy_scores.append(batch_entropy_scores)
-
-#     # Concatenate the entropy scores from all batches
-#     entropy_scores = torch.cat(entropy_scores)
-
-#     # Get the indices of the data points with the highest entropy
-#     query_indices = np.argsort(entropy_scores.cpu().numpy())[::-1]
-
-#     return query_indices
 
 
 def scene_organicer():
@@ -717,9 +699,9 @@ def run_latest_model():
 
       
 
-def run(scenes):
+def run(scenes, query = 'random', first_round = False):
     global j
-    orig_split(scenes)
+    orig_split(scenes, query, first_round)
     scene_organicer()
     sample_organicer()
     sample_data_organicer()
@@ -732,8 +714,8 @@ def run(scenes):
     print("finished...")
     latest = run_latest_model()
     command1 = 'python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes'
-    command2 = 'torchpack dist-run -np 1 python tools/train.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml'
-    command3 = f'torchpack dist-run -np 1 python tools/1test.py ./configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml ./checkpoints/{latest}/latest.pth --eval bbox'
+    command2 = f'torchpack dist-run -np 1 python tools/train.py {cfg}'
+    command3 = f'torchpack dist-run -np 1 python tools/1test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
     # # #commands = ['command1', 'command2', 'command3']
 
     
@@ -788,9 +770,7 @@ def run(scenes):
         print(f"Error: Command '{command3}' failed with return code {return_code}")
         sys.exit(1)  # Stop the loop if an error occurred
 
-
-
-#sample_data_organicer()
+#______________________________________________________________________________________________________________
 
 file_collector()
 
@@ -799,8 +779,8 @@ with open('tools/json_map/train.json', 'wb') as output_file:
     pass
 
 #run original split
-run(100)
+run(100, query = "random", first_round = False)
 
 # #random samples added per Active Learning round
 for i in range(0, 4):
-    run(50)
+    run(50, query = "random", first_round = False)

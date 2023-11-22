@@ -57,27 +57,27 @@ def create_nuscenes_infos(
     from nuscenes.nuscenes import NuScenes
 
     nusc = NuScenes(version=version, dataroot=root_path, verbose=True)
-    from data_converter import splits_entropy
+    from nuscenes.utils import splits
     
 
     available_vers = ["v1.0-trainval", "v1.0-test", "v1.0-mini", "v1.0-unlabeled"]
     assert version in available_vers
     if version == "v1.0-trainval":
-        train_scenes = splits_entropy.train
-        val_scenes = splits_entropy.val
+        train_scenes = splits.train
+        val_scenes = splits.val
         print(f'Debug len train: {len(train_scenes)}')
         print(f'Debug len val: {len(val_scenes)}')
     elif version == "v1.0-test":
-        train_scenes = splits_entropy.test
+        train_scenes = splits.test
         val_scenes = []
         print(f'Debug len test: {len(train_scenes)}')
     elif version == "v1.0-unlabeled":
-        train_scenes = splits_entropy.unlabeled
+        train_scenes = splits.unlabeled
         val_scenes = []
-        print(f'Debug len test: {len(train_scenes)}')
+        print(f'Debug len unlabeled: {len(train_scenes)}')
     elif version == "v1.0-mini":
-        train_scenes = splits_entropy.mini_train
-        val_scenes = splits_entropy.mini_val
+        train_scenes = splits.mini_train
+        val_scenes = splits.mini_val
     else:
         raise ValueError("unknown")
     
@@ -87,6 +87,7 @@ def create_nuscenes_infos(
     # filter existing scenes.
     available_scenes = get_available_scenes(nusc)
     available_scene_names = [s["name"] for s in available_scenes]
+    print("available_scene_names: ", available_scene_names)
     train_scenes = list(filter(lambda x: x in available_scene_names, train_scenes))
     val_scenes = list(filter(lambda x: x in available_scene_names, val_scenes))
     train_scenes = set(

@@ -9,7 +9,7 @@ import orjson
 
 
 
-files = ['train', 'val', 'test', 'unlabeled']
+files = ['train', 'val', 'unlabeled', 'test']
 
 # List to store name tokens
 train = []
@@ -19,7 +19,7 @@ test = []
 
 for file in files:
     # Open the JSON file
-    with open(f'/cvrr/bevfusion_bjork/tools/json_map/{file}.json', 'r') as json_file:
+    with open(f'/cvrr/BevFusion_AL/tools/json_map/{file}.json', 'r') as json_file:
         data = orjson.loads(json_file.read())
 
     #Search for name tokens in the JSON data
@@ -44,7 +44,6 @@ print(f'Len val: {len(val)}')
 print(f'Len test: {len(test)}')
 print(f'Len unlabeled: {len(unlabeled)}')
 
-
 def create_splits_logs(split: str, nusc: 'NuScenes') -> List[str]:
     """
     Returns the logs in each dataset split of nuScenes.
@@ -61,17 +60,17 @@ def create_splits_logs(split: str, nusc: 'NuScenes') -> List[str]:
 
     # Check compatibility of split with nusc_version.
     version = nusc.version
-    # if split in {'train', 'val', 'train_detect', 'train_track'}:
-    #     assert version.endswith('trainval'), \
-    #         'Requested split {} which is not compatible with NuScenes version {}'.format(split, version)
-    # elif split in {'mini_train', 'mini_val'}:
-    #     assert version.endswith('mini'), \
-    #         'Requested split {} which is not compatible with NuScenes version {}'.format(split, version)
-    # elif split == 'test':
-    #     assert version.endswith('test'), \
-    #         'Requested split {} which is not compatible with NuScenes version {}'.format(split, version)
-    # else:
-    #     raise ValueError('Requested split {} which this function cannot map to logs.'.format(split))
+    if split in {'train', 'val', 'unlabeled'}:
+        assert version.endswith('trainval'), \
+            'Requested split {} which is not compatible with NuScenes version {}'.format(split, version)
+    elif split in {'mini_train', 'mini_val'}:
+        assert version.endswith('mini'), \
+            'Requested split {} which is not compatible with NuScenes version {}'.format(split, version)
+    elif split == 'test':
+        assert version.endswith('test'), \
+            'Requested split {} which is not compatible with NuScenes version {}'.format(split, version)
+    else:
+        raise ValueError('Requested split {} which this function cannot map to logs.'.format(split))
 
     # Get logs for this split.
     scene_to_log = {scene['name']: nusc.get('log', scene['log_token'])['logfile'] for scene in nusc.scene}
@@ -96,9 +95,9 @@ def create_splits_scenes(verbose: bool = False) -> Dict[str, List[str]]:
     :return: A mapping from split name to a list of scenes names in that split.
     """
     # Use hard-coded splits.
-    all_scenes = train + val + test + unlabeled
+    all_scenes = train + val + unlabeled + test
     assert len(all_scenes) == 1000 and len(set(all_scenes)) == 1000, 'Error: Splits incomplete!'
-    scene_splits = {'train': train, 'val': val, 'test': test, 'unlabeled': unlabeled}#,
+    scene_splits = {'train': train, 'val': val, 'unlabeled': unlabeled, 'test': test}#,
                     #'mini_train': mini_train, 'mini_val': mini_val,
                     #'train_detect': train_detect, 'train_track': train_track}
 

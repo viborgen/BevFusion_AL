@@ -32,6 +32,13 @@ class Prediction(MetricData):
     @property
     def number_of_modes(self) -> int:
         return self.prediction.shape[0]
+    
+    @property
+    def entropy(self):
+        """Calculate the entropy of the probabilities."""
+        # Ensure probabilities are normalized
+        probabilities = self.probabilities / self.probabilities.sum()
+        return -np.sum(probabilities * np.log(probabilities)) #bjork
 
     def serialize(self):
         """ Serialize to json. """
