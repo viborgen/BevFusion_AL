@@ -15,7 +15,9 @@ from mmdet3d.runner import CustomEpochBasedRunner
 from mmdet3d.utils import get_root_logger
 from mmdet.core import DistEvalHook
 from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTensor
+import wandb
 
+counter = 0
 
 def train_model(
     model,
@@ -122,6 +124,9 @@ def train_model(
 
         # Add WandbLoggerHook to log the validation metrics
         runner.register_hook(WandbLoggerHook())
+        counter = counter + 1
+        wandb.log({"epoch": counter})
+        
 
     # if cfg.resume_from:
     #     runner.resume(cfg.resume_from)

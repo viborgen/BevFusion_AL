@@ -43,7 +43,6 @@ def main():
             config=cfg._cfg_dict,
             sync_tensorboard=True,
             group="train",
-            step=epoch,
         )
 
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
@@ -89,17 +88,24 @@ def main():
             cfg["sync_bn"] = dict(exclude=[])
         model = convert_sync_batchnorm(model, exclude=cfg["sync_bn"]["exclude"])
 
-    epoch = 1
-    for epoch in range(1, cfg.max_epochs):
-        logger.info(f"Model:\n{model}")
-        train_model(
-            model,
-            datasets,
-            cfg,
-            distributed=True,
-            validate=True,
-            timestamp=timestamp,
-        )
+    
+    #for epoch in range(1, cfg.max_epochs):
+    logger.info(f"Model:\n{model}")
+
+        
+
+    train_model(
+        model,
+        datasets,
+        cfg,
+        distributed=True,
+        validate=True,
+        timestamp=timestamp,
+    )
+
+    
+
+        
     
 
 

@@ -146,6 +146,7 @@ def main():
         entity="ricenet",
         config=cfg._cfg_dict,
         sync_tensorboard=True,
+        group="test",
     )
 
 
