@@ -2,17 +2,19 @@ from typing import Dict, List
 import orjson as json
 import random
 import os
+import numpy as np
 
 import subprocess
 import sys
 
+import mmcv
 from mmcv import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import get_dist_info, init_dist, load_checkpoint, wrap_fp16_model
 from mmdet.apis import init_detector, inference_detector
 
-from mmdet3d.apis import single_gpu_test
+#from mmdet3d.apis import single_gpu_test
 from mmdet3d.models import build_model
 from mmdet3d.datasets import build_dataloader, build_dataset
 
@@ -30,6 +32,14 @@ import argparse
 from mmdet.datasets import replace_ImageToTensor
 from torchpack import distributed as dist
 
+u_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-unlabeled'
+
+with open(os.path.join(u_path, 'sample.json'), 'r') as f:
+        sample_tokens = json.loads(f.read())
+
+
+with open(os.path.join(u_path, 'scene.json'), 'r') as f:
+        scene_tokens = json.loads(f.read())
 
 def randomQ(random_num, random_labels):
     train = random.sample(list(random_labels), random_num)
@@ -61,26 +71,75 @@ def entropyQ(AL_split, cfg_file):
     for result in results:
         for class_name, class_output in list(result.items()):
             # The scores are the last column in the class_output array
-            scores = result['scores_3d'].numpy()
+            scores = result['scores_3d']
 
             # Convert the scores to probabilities
             probabilities = torch.softmax(scores, dim=0)
 
             # Calculate the entropy
-            entropy = -torch.sum(probabilities * torch.log(probabilities)).item()
+            # Calculate the entropy for each score
+            entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9), dim=0).item()
+
+            #entropy = -torch.sum(probabilities * torch.log(probabilities)).item()
 
             # Add the entropy to the result
-            result[class_name + '_entropy'] = entropy
+            result['entropy'] = entropy
+            #result[class_name + '_entropy'] = entropy
 
     # Sort the results by entropy
-    results.sort(key=lambda x: x[class_name + '_entropy'], reverse=True)
+    results.sort(key=lambda x: x['entropy'], reverse=True)
+    #results.sort(key=lambda x: x[class_name + '_entropy'], reverse=True)
 
-    selected_samples = results[:AL_split]
-    print("entropy selected samples: ", selected_samples)
+    scene_names = []
 
-    # Select the samples with the highest entropy
-    return selected_samples
+    for result in results:
+        scene_token = result['sample']['scene_token']
 
+        for token in scene_tokens:
+            if  token.get('token') == scene_token and token.get('name') not in scene_names:
+                scene_names.append(token.get('name'))
+
+            # Break the loop if we have found 100 unique scenes
+            if len(scene_names) >= AL_split:
+                break
+
+        # Break the outer loop as well
+        if len(scene_names) >= AL_split:
+            break
+
+    print("scene names: ", scene_names)
+    return scene_names
+
+
+
+    #selected_samples = [result['ann_info'] for result in results[:AL_split]]
+    # selected_samples = results[:AL_split]
+    # print("entropy selected samples: ", selected_samples)
+
+    # # Select the samples with the highest entropy
+    # return selected_samples
+
+
+
+def single_gpu_test(model, data_loader, sample_tokens):
+    model.eval()
+    results = []
+    dataset = data_loader.dataset
+    prog_bar = mmcv.ProgressBar(len(dataset))
+    for i, data in enumerate(data_loader):
+        with torch.no_grad():
+            result = model(return_loss=False, rescale=True, **data)
+        
+        # Add the sample token to the result
+        for r in result:
+            r['sample'] = sample_tokens[i]
+
+        results.extend(result)
+        batch_size = len(result)
+        for _ in range(batch_size):
+            prog_bar.update()
+    #print("results: ", results)
+    return results
 
 
 
@@ -165,6 +224,7 @@ def inference(cfg_file):
 
     # build the dataloader
     dataset = build_dataset(cfg.data.unlabeled)
+    #print("dataset: ", dataset)
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=samples_per_gpu,
@@ -172,6 +232,9 @@ def inference(cfg_file):
         dist=distributed,
         shuffle=False,
     )
+
+    #print("dataset: ", data_loader)
+
 
     # build the model and load checkpoint
     cfg.model.train_cfg = None
@@ -191,6 +254,10 @@ def inference(cfg_file):
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
-        results = single_gpu_test(model, data_loader)
+        results = single_gpu_test(model, data_loader, sample_tokens)
+    
+    # results = dataset._extract_data(results, cfg.data.unlabeled.pipeline, "interval")
+    # print(results)
 
     return results
+

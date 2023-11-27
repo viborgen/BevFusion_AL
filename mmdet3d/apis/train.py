@@ -17,7 +17,7 @@ from mmdet.core import DistEvalHook
 from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTensor
 import wandb
 
-counter = 0
+
 
 def train_model(
     model,
@@ -27,6 +27,7 @@ def train_model(
     validate=False,
     timestamp=None,
 ):
+    counter = 0
     logger = get_root_logger()
 
     # prepare data loaders

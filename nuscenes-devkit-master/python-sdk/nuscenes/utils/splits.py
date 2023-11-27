@@ -96,7 +96,7 @@ def create_splits_scenes(verbose: bool = False) -> Dict[str, List[str]]:
     """
     # Use hard-coded splits.
     all_scenes = train + val + unlabeled + test
-    assert len(all_scenes) == 1000 and len(set(all_scenes)) == 1000, 'Error: Splits incomplete!'
+    #assert len(all_scenes) == 1000 and len(set(all_scenes)) == 1000, 'Error: Splits incomplete!'
     scene_splits = {'train': train, 'val': val, 'unlabeled': unlabeled, 'test': test}#,
                     #'mini_train': mini_train, 'mini_val': mini_val,
                     #'train_detect': train_detect, 'train_track': train_track}

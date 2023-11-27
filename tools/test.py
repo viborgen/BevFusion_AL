@@ -43,7 +43,6 @@ def parse_args():
         "--eval",
         type=str,
         nargs="+",
-        default="bbox",
         help='evaluation metrics, which depends on the dataset, e.g., "bbox",'
         ' "segm", "proposal" for COCO, and "mAP", "recall" for PASCAL VOC',
     )
@@ -138,16 +137,17 @@ def main():
 
     
     
-    # wandb.login()
-    # os.environ["WANDB_PROJECT"] = "BEV-active-Learning" # name your W&B project 
+    wandb.login()
+    os.environ["WANDB_PROJECT"] = "BEV-active-Learning" # name your W&B project 
 
-    # wandb.init(
-    #     project="BEV-active-Learning",
-    #     name="test",
-    #     entity="ricenet",
-    #     config=cfg._cfg_dict,
-    #     sync_tensorboard=True,
-    # )
+    wandb.init(
+        project="BEV-active-Learning",
+        name="test",
+        entity="ricenet",
+        config=cfg._cfg_dict,
+        sync_tensorboard=True,
+        group="test",
+    )
 
 
     if args.cfg_options is not None:
@@ -159,20 +159,20 @@ def main():
     cfg.model.pretrained = None
     # in case the test dataset is concatenated
     samples_per_gpu = 1
-    if isinstance(cfg.data.unlabeled, dict):
-        cfg.data.unlabeled.test_mode = True
-        samples_per_gpu = cfg.data.unlabeled.pop("samples_per_gpu", 1)
+    if isinstance(cfg.data.test, dict):
+        cfg.data.test.test_mode = True
+        samples_per_gpu = cfg.data.test.pop("samples_per_gpu", 1)
         if samples_per_gpu > 1:
             # Replace 'ImageToTensor' to 'DefaultFormatBundle'
-            cfg.data.unlabeled.pipeline = replace_ImageToTensor(cfg.data.unlabeled.pipeline)
-    elif isinstance(cfg.data.unlabeled, list):
-        for ds_cfg in cfg.data.unlabeled:
+            cfg.data.test.pipeline = replace_ImageToTensor(cfg.data.test.pipeline)
+    elif isinstance(cfg.data.test, list):
+        for ds_cfg in cfg.data.test:
             ds_cfg.test_mode = True
         samples_per_gpu = max(
-            [ds_cfg.pop("samples_per_gpu", 1) for ds_cfg in cfg.data.unlabeled]
+            [ds_cfg.pop("samples_per_gpu", 1) for ds_cfg in cfg.data.test]
         )
         if samples_per_gpu > 1:
-            for ds_cfg in cfg.data.unlabeled:
+            for ds_cfg in cfg.data.test:
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
     # init distributed env first, since logger depends on the dist info.
@@ -183,7 +183,7 @@ def main():
         set_random_seed(args.seed, deterministic=args.deterministic)
 
     # build the dataloader
-    dataset = build_dataset(cfg.data.unlabeled)
+    dataset = build_dataset(cfg.data.test)
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=samples_per_gpu,
@@ -211,8 +211,38 @@ def main():
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
         outputs = single_gpu_test(model, data_loader)
+    else:
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+        )
+        outputs = multi_gpu_test(model, data_loader, args.tmpdir, args.gpu_collect)
 
-        wandb.log(outputs)
+
+    rank, _ = get_dist_info()
+    if rank == 0:
+        if args.out:
+            print(f"\nwriting results to {args.out}")
+            mmcv.dump(outputs, args.out)
+        kwargs = {} if args.eval_options is None else args.eval_options
+        if args.format_only:
+            dataset.format_results(outputs, **kwargs)
+        if args.eval:
+            eval_kwargs = cfg.get("evaluation", {}).copy()
+            # hard-code way to remove EvalHook args
+            for key in [
+                "interval",
+                "tmpdir",
+                "start",
+                "gpu_collect",
+                "save_best",
+                "rule",
+            ]:
+                eval_kwargs.pop(key, None)
+            eval_kwargs.update(dict(metric=args.eval, **kwargs))
+            print(dataset.evaluate(outputs, **eval_kwargs))
+            wandb.log(dataset.evaluate(outputs, **eval_kwargs))
 
 
 if __name__ == "__main__":

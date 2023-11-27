@@ -133,7 +133,7 @@ evaluation:
   pipeline: ${test_pipeline}
 
 
-max_epochs: 5
+max_epochs: 4
 
 
 checkpoint_config:

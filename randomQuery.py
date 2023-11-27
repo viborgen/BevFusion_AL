@@ -177,7 +177,7 @@ def file_collector():
 
 
 def orig_split(AL_split = 100, query = "random", first_round = False):
-    unlabeled =[] #list(sorted(set(init_train_detect + init_train_track)))
+    unlabeled = [] #list(sorted(set(init_train_detect + init_train_track)))
 
     try:
         # Load existing JSON data from the file
@@ -203,6 +203,7 @@ def orig_split(AL_split = 100, query = "random", first_round = False):
         if first_round == True:
             train = randomQ(AL_split, labels)
         else:
+            #batch = 100
             train = entropyQ(AL_split, cfg)
 
     # # Take the minimum of random_num and the length of random_labels
@@ -220,10 +221,10 @@ def orig_split(AL_split = 100, query = "random", first_round = False):
 
 
     val = list(sorted(set(init_val)))
-    
+#_______________________________________________________________________________________________________________________
 
-    # Save the combined data to a new JSON file
-    with open('tools/json_map/combined_scene.json', 'r') as json_file:
+    #  Load existing JSON data from the file
+    with open(os.path.join(train_path, 'orig_scene.json'), 'r') as json_file:
         existing_data = json.loads(json_file.read())
 
     # # Load existing JSON data from the file
@@ -284,21 +285,32 @@ def orig_split(AL_split = 100, query = "random", first_round = False):
     #__________________________________________unlabeled split_________________________________________________________
 
 
-    selected_data_unlabeled = []
-    # Find related samples for each token in the tokens list
-    for item in existing_data:
-        if item.get('name') in unlabeled:
-            selected_data_unlabeled.append(item)
+    # selected_data_unlabeled = []
+    # # Find related samples for each token in the tokens list
+    # for item in existing_data:
+    #     if item.get('name') in unlabeled:
+    #         selected_data_unlabeled.append(item)
+            
+    # # If the object with the specified name token is found, save it to a new JSON file
+    # if selected_data_unlabeled:
+    #     with open('tools/json_map/unlabeled.json', 'wb') as output_file:
+    #         #json.dumps(selected_data_test, output_file, indent=0)
+    #         output_file.write(json.dumps(selected_data_unlabeled, option=json.OPT_SORT_KEYS))
+    #         #print(f"Object with name '{test}' saved to test.json")
+    # else:
+    #     print(f"Object with name '{unlabeled}' not found in the data.")
+    # print("unlabeled: ", len(selected_data_unlabeled))
+
             
     # If the object with the specified name token is found, save it to a new JSON file
-    if selected_data_unlabeled:
+    if unlabeled:
         with open('tools/json_map/unlabeled.json', 'wb') as output_file:
             #json.dumps(selected_data_test, output_file, indent=0)
-            output_file.write(json.dumps(selected_data_unlabeled, option=json.OPT_SORT_KEYS))
+            output_file.write(json.dumps(unlabeled, option=json.OPT_SORT_KEYS))
             #print(f"Object with name '{test}' saved to test.json")
     else:
         print(f"Object with name '{unlabeled}' not found in the data.")
-    print("unlabeled: ", len(selected_data_unlabeled))
+    print("unlabeled: ", len(unlabeled))
 
 
     #__________________________________________test split_________________________________________________________
@@ -715,7 +727,7 @@ def run(scenes, query = 'random', first_round = False):
     latest = run_latest_model()
     command1 = 'python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes'
     command2 = f'torchpack dist-run -np 1 python tools/train.py {cfg}'
-    command3 = f'torchpack dist-run -np 1 python tools/1test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
+    command3 = f'torchpack dist-run -np 1 python tools/test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
     # # #commands = ['command1', 'command2', 'command3']
 
     
@@ -772,15 +784,15 @@ def run(scenes, query = 'random', first_round = False):
 
 #______________________________________________________________________________________________________________
 
-file_collector()
+#file_collector()
 
 #make sure file is empty before starting random collection process
 with open('tools/json_map/train.json', 'wb') as output_file:
     pass
 
 #run original split
-run(100, query = "random", first_round = False)
+run(100, query = "entropy", first_round = True)
 
 # #random samples added per Active Learning round
 for i in range(0, 4):
-    run(50, query = "random", first_round = False)
+    run(50, query = "entropy", first_round = False)
