@@ -285,11 +285,11 @@ def orig_split(AL_split = 100, query = "random", first_round = False):
     #__________________________________________unlabeled split_________________________________________________________
 
 
-    # selected_data_unlabeled = []
-    # # Find related samples for each token in the tokens list
-    # for item in existing_data:
-    #     if item.get('name') in unlabeled:
-    #         selected_data_unlabeled.append(item)
+    selected_data_unlabeled = []
+    # Find related samples for each token in the tokens list
+    for item in existing_data:
+        if item.get('name') in unlabeled:
+            selected_data_unlabeled.append(item)
             
     # # If the object with the specified name token is found, save it to a new JSON file
     # if selected_data_unlabeled:
@@ -303,14 +303,14 @@ def orig_split(AL_split = 100, query = "random", first_round = False):
 
             
     # If the object with the specified name token is found, save it to a new JSON file
-    if unlabeled:
+    if selected_data_unlabeled:
         with open('tools/json_map/unlabeled.json', 'wb') as output_file:
             #json.dumps(selected_data_test, output_file, indent=0)
-            output_file.write(json.dumps(unlabeled, option=json.OPT_SORT_KEYS))
+            output_file.write(json.dumps(selected_data_unlabeled, option=json.OPT_SORT_KEYS))
             #print(f"Object with name '{test}' saved to test.json")
     else:
-        print(f"Object with name '{unlabeled}' not found in the data.")
-    print("unlabeled: ", len(unlabeled))
+        print(f"Object with name '{selected_data_unlabeled}' not found in the data.")
+    print("unlabeled: ", len(selected_data_unlabeled))
 
 
     #__________________________________________test split_________________________________________________________
@@ -696,7 +696,7 @@ def file_gatherer(file):
     j += 1
     
 
-def run_latest_model():
+def run_latest_chkpnt():
     # Get a list of all directories in the directory
     dirs = [d for d in os.listdir('./checkpoints') if os.path.isdir(os.path.join('./checkpoints', d))]
 
@@ -724,10 +724,10 @@ def run(scenes, query = 'random', first_round = False):
     ann_data_organicer()
 
     print("finished...")
-    latest = run_latest_model()
+    
     command1 = 'python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes'
     command2 = f'torchpack dist-run -np 1 python tools/train.py {cfg}'
-    command3 = f'torchpack dist-run -np 1 python tools/test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
+    
     # # #commands = ['command1', 'command2', 'command3']
 
     
@@ -741,10 +741,11 @@ def run(scenes, query = 'random', first_round = False):
             print(line)  
 
         # # Wait for the process to finish
-    return_code = process.wait()  # Wait for the process to finish and get the return code
+    #return_code = process.wait()  # Wait for the process to finish and get the return code
+    stdout, stderr = process.communicate()  # Wait for the process to finish and get the return code
 
-    if return_code != 0:
-        print(f"Error: Command '{command1}' failed with return code {return_code}")
+    if process.returncode != 0:
+        print(f"Error: Command '{command1}' failed with return code {process.returncode}")
         sys.exit(1)  # Stop the loop if an error occurred
 
 
@@ -758,13 +759,15 @@ def run(scenes, query = 'random', first_round = False):
             print(line)
 
     # # Wait for the process to finish
-    return_code = process.wait()  # Wait for the process to finish and get the return code
+    #return_code = process.wait()  # Wait for the process to finish and get the return code
+    stdout, stderr = process.communicate()  # Wait for the process to finish and get the return code
 
-    if return_code != 0:
-        print(f"Error: Command '{command2}' failed with return code {return_code}")
+    if process.returncode != 0:
+        print(f"Error: Command '{command2}' failed with return code {process.returncode}")
         sys.exit(1)  # Stop the loop if an error occurred
 
-    
+    latest = run_latest_chkpnt()
+    command3 = f'torchpack dist-run -np 1 python tools/test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
 
     # # Use Popen to run the command and capture the output
     process = subprocess.Popen(command3, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
@@ -776,23 +779,73 @@ def run(scenes, query = 'random', first_round = False):
             print(line) 
 
     # # Wait for the process to finish
-    return_code = process.wait()  # Wait for the process to finish and get the return code
+    #return_code = process.wait()  # Wait for the process to finish and get the return code
+    stdout, stderr = process.communicate()  # Wait for the process to finish and get the return code
 
-    if return_code != 0:
-        print(f"Error: Command '{command3}' failed with return code {return_code}")
+    if process.returncode != 0:
+        print(f"Error: Command '{command3}' failed with return code {process.returncode}")
         sys.exit(1)  # Stop the loop if an error occurred
+
+
+def run_com():
+    print("start from commands")
+    
+    command2 = f'torchpack dist-run -np 1 python tools/train.py {cfg}'
+
+
+    # Use Popen to run the command and capture the output
+    process = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+    for line in process.stdout:
+        if line.startswith('['):
+            sys.stdout.write('\r' + line.strip())  # Overwrite the current line
+            sys.stdout.flush()
+        else:
+            print(line)
+
+    # # Wait for the process to finish
+    #return_code = process.wait()  # Wait for the process to finish and get the return code
+    stdout, stderr = process.communicate()  # Wait for the process to finish and get the return code
+
+    if process.returncode != 0:
+        print(f"Error: Command '{command2}' failed with return code {process.returncode}")
+        sys.exit(1)  # Stop the loop if an error occurred
+
+    latest = run_latest_chkpnt()
+    command3 = f'torchpack dist-run -np 1 python tools/test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
+
+    # # Use Popen to run the command and capture the output
+    process = subprocess.Popen(command3, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+    for line in process.stdout:
+        if line.startswith('['):
+            sys.stdout.write('\r' + line.strip())  # Overwrite the current line
+            sys.stdout.flush()
+        else:
+            print(line) 
+
+    # # Wait for the process to finish
+    #return_code = process.wait()  # Wait for the process to finish and get the return code
+    stdout, stderr = process.communicate()  # Wait for the process to finish and get the return code
+
+    if process.returncode != 0:
+        print(f"Error: Command '{command3}' failed with return code {process.returncode}")
+        sys.exit(1)  # Stop the loop if an error occurred
+
+
 
 #______________________________________________________________________________________________________________
 
 #file_collector()
 
 #make sure file is empty before starting random collection process
-with open('tools/json_map/train.json', 'wb') as output_file:
-    pass
+# with open('tools/json_map/train.json', 'wb') as output_file:
+#     pass
 
-#run original split
-run(100, query = "entropy", first_round = True)
+# #run original split
+# run(100, query = "entropy", first_round = True)
+
+#if error occured in previous run, start with this line and comment out the liones above
+run_com()
 
 # #random samples added per Active Learning round
-for i in range(0, 4):
+for i in range(0, 3):
     run(50, query = "entropy", first_round = False)
