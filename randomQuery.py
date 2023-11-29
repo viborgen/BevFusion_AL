@@ -18,6 +18,7 @@ train_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-trainval'
 test_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-test'
 u_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-unlabeled'
 cfg = './configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml'
+#cfg = 'configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml'
 
 #from nuscenes import NuScenes
 
@@ -698,6 +699,11 @@ def file_gatherer(file):
 
 def run_latest_chkpnt():
     # Get a list of all directories in the directory
+
+    folders = [train_path, test_path, u_path]
+    name = ['train', 'test', 'u']
+        
+
     dirs = [d for d in os.listdir('./checkpoints') if os.path.isdir(os.path.join('./checkpoints', d))]
 
     # Sort the directories by modification time
@@ -705,6 +711,16 @@ def run_latest_chkpnt():
 
     # Get the latest directory
     latest_dir = dirs[-1]
+
+    for folder, name in folders:
+
+        with open(os.path.join(folder, f'scene.json'), 'r') as f:
+            data = json.loads(f.read())
+
+        with open(f'/checkpoints/{latest_dir}/scene_{name}.json', 'wb') as f:
+            #json.dumps(test, f, indent=0)
+            f.write(json.dumps(data, option=json.OPT_SORT_KEYS))
+            print(f"scene_{folder}.json saved to test folder")
 
     return latest_dir
 
@@ -837,15 +853,15 @@ def run_com():
 #file_collector()
 
 #make sure file is empty before starting random collection process
-# with open('tools/json_map/train.json', 'wb') as output_file:
-#     pass
+with open('tools/json_map/train.json', 'wb') as output_file:
+    pass
 
-# #run original split
-# run(100, query = "entropy", first_round = True)
+#run original split
+run(100, query = "random", first_round = True)
 
 #if error occured in previous run, start with this line and comment out the liones above
-run_com()
+#run_com()
 
 # #random samples added per Active Learning round
 for i in range(0, 3):
-    run(50, query = "entropy", first_round = False)
+    run(50, query = "random", first_round = False)

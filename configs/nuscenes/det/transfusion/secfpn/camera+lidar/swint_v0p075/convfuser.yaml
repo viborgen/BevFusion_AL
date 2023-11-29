@@ -6,6 +6,63 @@ model:
 
 data:
   samples_per_gpu: 1 #6
+  workers_per_gpu: 4
+  train:
+    type: CBGSDataset
+    dataset:
+      type: ${dataset_type}
+      dataset_root: ${dataset_root}
+      ann_file: ${dataset_root + "nuscenes_infos_train.pkl"}
+      pipeline: ${train_pipeline}
+      object_classes: ${object_classes}
+      map_classes: ${map_classes}
+      modality: ${input_modality}
+      test_mode: false
+      use_valid_flag: true
+      box_type_3d: LiDAR
+  val:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${dataset_root + "nuscenes_infos_val.pkl"}
+    pipeline: ${test_pipeline}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: false
+    box_type_3d: LiDAR
+  test:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${dataset_root + "nuscenes_infos_val.pkl"}
+    pipeline: ${test_pipeline}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: true
+    box_type_3d: LiDAR
+  unlabeled:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${dataset_root + "nuscenes_infos_unlabeled.pkl"}
+    pipeline: ${test_pipeline}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: true
+    box_type_3d: LiDAR
+
+evaluation:
+  interval: 1
+  pipeline: ${test_pipeline}
+
+
+max_epochs: 6
+
+
+checkpoint_config:
+  interval: 1
+  max_keep_ckpts: 1
+  out_dir: './checkpoints'
 
 
 #max_epochs: 1
