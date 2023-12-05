@@ -41,7 +41,9 @@ with open(os.path.join(u_path, 'sample.json'), 'r') as f:
 with open(os.path.join(u_path, 'scene.json'), 'r') as f:
         scene_tokens = json.loads(f.read())
 
-def randomQ(random_num, random_labels):
+def randomQ(random_num, random_labels, seed=None):
+    if seed is not None:
+        random.seed(seed)
     train = random.sample(list(random_labels), random_num)
 
     return train

@@ -9,6 +9,7 @@ from mmcv.runner import (
     build_optimizer,
     build_runner,
     WandbLoggerHook,
+    LoggerHook,
 )
 from mmdet3d.runner import CustomEpochBasedRunner
 
@@ -16,7 +17,6 @@ from mmdet3d.utils import get_root_logger
 from mmdet.core import DistEvalHook
 from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTensor
 import wandb
-
 
 
 def train_model(
@@ -27,7 +27,7 @@ def train_model(
     validate=False,
     timestamp=None,
 ):
-    counter = 0
+    #counter = 0
     logger = get_root_logger()
 
     # prepare data loaders
@@ -125,12 +125,13 @@ def train_model(
 
         # Add WandbLoggerHook to log the validation metrics
         runner.register_hook(WandbLoggerHook())
-        counter = counter + 1
-        wandb.log({"epoch": counter})
+        #counter = counter + 1
+        #wandb.log({"epoch": LoggerHook.get_epoch(runner)})
+        #wandb.log({"epoch": counter})
         
 
     # if cfg.resume_from:
     #     runner.resume(cfg.resume_from)
-    # elif cfg.load_from:
-    #     runner.load_checkpoint(cfg.load_from)
+    elif cfg.load_from:
+        runner.load_checkpoint(cfg.load_from)
     runner.run(data_loaders, [("train", 1)])

@@ -2,6 +2,7 @@ import argparse
 import copy
 import os
 import warnings
+import orjson as json
 
 import wandb
 
@@ -136,13 +137,17 @@ def main():
     print(cfg)
 
     
-    
+    train_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-trainval'
+    with open(os.path.join(train_path, 'scene.json'), 'r') as f:
+        scene_data = json.loads(f.read())
+
+    subset = len(scene_data) - 150
     wandb.login()
     os.environ["WANDB_PROJECT"] = "BEV-active-Learning" # name your W&B project 
 
     wandb.init(
         project="BEV-active-Learning",
-        name="test",
+        name=f"random_bev_test_{subset}",
         entity="ricenet",
         config=cfg._cfg_dict,
         sync_tensorboard=True,

@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import time
 
 
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
@@ -17,8 +18,8 @@ import sys
 train_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-trainval'
 test_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-test'
 u_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-unlabeled'
-cfg = './configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml'
-#cfg = 'configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml'
+#cfg = './configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/defaultModified.yaml'
+cfg = 'configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml'
 
 #from nuscenes import NuScenes
 
@@ -198,7 +199,7 @@ def orig_split(AL_split = 100, query = "random", first_round = False):
 
     if query == "random":
 
-        train = randomQ(AL_split, labels)
+        train = randomQ(AL_split, labels, seed=42)
 
     elif query == "entropy":
         if first_round == True:
@@ -698,11 +699,7 @@ def file_gatherer(file):
     
 
 def run_latest_chkpnt():
-    # Get a list of all directories in the directory
-
-    folders = [train_path, test_path, u_path]
-    name = ['train', 'test', 'u']
-        
+    # Get a list of all directories in the directory   
 
     dirs = [d for d in os.listdir('./checkpoints') if os.path.isdir(os.path.join('./checkpoints', d))]
 
@@ -711,16 +708,6 @@ def run_latest_chkpnt():
 
     # Get the latest directory
     latest_dir = dirs[-1]
-
-    for folder, name in folders:
-
-        with open(os.path.join(folder, f'scene.json'), 'r') as f:
-            data = json.loads(f.read())
-
-        with open(f'/checkpoints/{latest_dir}/scene_{name}.json', 'wb') as f:
-            #json.dumps(test, f, indent=0)
-            f.write(json.dumps(data, option=json.OPT_SORT_KEYS))
-            print(f"scene_{folder}.json saved to test folder")
 
     return latest_dir
 
@@ -731,6 +718,27 @@ def run(scenes, query = 'random', first_round = False):
     global j
     orig_split(scenes, query, first_round)
     scene_organicer()
+
+    folders = [train_path, test_path, u_path]
+    names = ['train', 'test', 'u']
+
+    # Create a new directory with the current timestamp
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    new_dir = os.path.join('./tools/json_checkpoints', timestamp)
+    os.makedirs(new_dir)
+
+    for folder, name in zip(folders, names):
+
+        with open(os.path.join(folder, f'scene.json'), 'r') as f:
+            data = json.loads(f.read())
+
+        len_data = len(data)
+
+        with open(os.path.join(new_dir, f'scene_{name}_{len_data}.json'), 'wb') as f:
+            #json.dumps(test, f, indent=0)
+            f.write(json.dumps(data, option=json.OPT_SORT_KEYS))
+            print(f"scene_{name}.json saved to test folder")
+
     sample_organicer()
     sample_data_organicer()
     files = ['orig_calibrated_sensor', 'orig_log', 'orig_ego_pose']
@@ -739,6 +747,9 @@ def run(scenes, query = 'random', first_round = False):
         file_gatherer(file)
     ann_data_organicer()
 
+
+    #save scene.json to the latest checkpoint folder so it is possible to use the same split of data if det model crashes
+    #run_latest_chkpnt()
     print("finished...")
     
     command1 = 'python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes'
@@ -808,6 +819,26 @@ def run_com():
     
     command2 = f'torchpack dist-run -np 1 python tools/train.py {cfg}'
 
+    folders = [train_path, test_path, u_path]
+    names = ['train', 'test', 'u']
+
+    # Create a new directory with the current timestamp
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    new_dir = os.path.join('./tools/json_checkpoints', timestamp)
+    os.makedirs(new_dir)
+
+    for folder, name in zip(folders, names):
+
+        with open(os.path.join(folder, f'scene.json'), 'r') as f:
+            data = json.loads(f.read())
+
+        len_data = len(data)
+
+        with open(os.path.join(new_dir, f'scene_{name}_{len_data}.json'), 'wb') as f:
+            #json.dumps(test, f, indent=0)
+            f.write(json.dumps(data, option=json.OPT_SORT_KEYS))
+            print(f"scene_{name}.json saved to test folder")
+
 
     # Use Popen to run the command and capture the output
     process = subprocess.Popen(command2, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
@@ -827,7 +858,7 @@ def run_com():
         sys.exit(1)  # Stop the loop if an error occurred
 
     latest = run_latest_chkpnt()
-    command3 = f'torchpack dist-run -np 1 python tools/test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
+    command3 = f'torchpack dist-run -np 1 python tools/test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox --eval-options jsonfile_prefix=./checkpoints/{latest}/result.json'
 
     # # Use Popen to run the command and capture the output
     process = subprocess.Popen(command3, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
@@ -850,17 +881,15 @@ def run_com():
 
 #______________________________________________________________________________________________________________
 
-#file_collector()
+# # #make sure file is empty before starting random collection process
+# with open('tools/json_map/train.json', 'wb') as output_file:
+#     pass
 
-#make sure file is empty before starting random collection process
-with open('tools/json_map/train.json', 'wb') as output_file:
-    pass
+# #run original split
+# run(150, query = "random", first_round = True)
 
-#run original split
-run(100, query = "random", first_round = True)
-
-#if error occured in previous run, start with this line and comment out the liones above
-#run_com()
+#if error occured in previous run, start with this line and comment out the lines above
+run_com()
 
 # #random samples added per Active Learning round
 for i in range(0, 3):

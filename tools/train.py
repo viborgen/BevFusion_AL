@@ -3,6 +3,7 @@ import copy
 import os
 import random
 import time
+import orjson as json
 
 import numpy as np
 import torch
@@ -31,14 +32,18 @@ def main():
 
     cfg = Config(recursive_eval(configs), filename=args.config)
 
+    train_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-trainval'
+    with open(os.path.join(train_path, 'scene.json'), 'r') as f:
+        scene_data = json.loads(f.read())
+
     if dist.is_master():
         import wandb
         wandb.login()
         os.environ["WANDB_PROJECT"] = "BEV-active-Learning" # name your W&B project 
-
+        subset = len(scene_data) - 150
         wandb.init(
             project="BEV-active-Learning",
-            name="train",
+            name=f"random_bev_train_{subset}",
             entity="ricenet",
             config=cfg._cfg_dict,
             sync_tensorboard=True,
