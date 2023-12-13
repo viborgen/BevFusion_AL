@@ -26,6 +26,7 @@ from mmdet.datasets import build_dataloader, build_dataset
 
 from nuscenes.eval.prediction.data_classes import Prediction
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
+from mmdet3d.datasets.nuscenes_dataset import NuScenesDataset
 from mmdet.apis import multi_gpu_test, set_random_seed
 from torchpack.utils.config import configs
 import argparse
@@ -33,119 +34,18 @@ from mmdet.datasets import replace_ImageToTensor
 from torchpack import distributed as dist
 
 u_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-unlabeled'
+trainval_path = '/cvrr/BevFusion_AL/data/nuscenes/v1.0-trainval'
+jsonfile_prefix = './tools/'
 
 with open(os.path.join(u_path, 'sample.json'), 'r') as f:
-        sample_tokens = json.loads(f.read())
+        tokens = json.loads(f.read())
 
 
 with open(os.path.join(u_path, 'scene.json'), 'r') as f:
         scene_tokens = json.loads(f.read())
 
-def randomQ(random_num, random_labels, seed=None):
-    if seed is not None:
-        random.seed(seed)
-    train = random.sample(list(random_labels), random_num)
 
-    return train
-
-
-def run_latest_model():
-    # Get a list of all directories in the directory
-    dirs = [d for d in os.listdir('./checkpoints') if os.path.isdir(os.path.join('./checkpoints', d))]
-
-    # Sort the directories by modification time
-    dirs.sort(key=lambda x: os.path.getmtime(os.path.join('./checkpoints', x)))
-
-    # Get the latest directory
-    latest_dir = dirs[-1]
-
-    return latest_dir
-
-
-
-
-def entropyQ(AL_split, cfg_file):
-    
-    #print("results: ", results)
-    results = inference(cfg_file)
-#____________________________________________________________________________________________________
-    # Calculate probabilities and entropy for each result
-    for result in results:
-        for class_name, class_output in list(result.items()):
-            # The scores are the last column in the class_output array
-            scores = result['scores_3d']
-
-            # Convert the scores to probabilities
-            probabilities = torch.softmax(scores, dim=0)
-
-            # Calculate the entropy
-            # Calculate the entropy for each score
-            entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9), dim=0).item()
-
-            #entropy = -torch.sum(probabilities * torch.log(probabilities)).item()
-
-            # Add the entropy to the result
-            result['entropy'] = entropy
-            #result[class_name + '_entropy'] = entropy
-
-    # Sort the results by entropy
-    results.sort(key=lambda x: x['entropy'], reverse=True)
-    #results.sort(key=lambda x: x[class_name + '_entropy'], reverse=True)
-
-    scene_names = []
-
-    for result in results:
-        scene_token = result['sample']['scene_token']
-
-        for token in scene_tokens:
-            if  token.get('token') == scene_token and token.get('name') not in scene_names:
-                scene_names.append(token.get('name'))
-
-            # Break the loop if we have found 100 unique scenes
-            if len(scene_names) >= AL_split:
-                break
-
-        # Break the outer loop as well
-        if len(scene_names) >= AL_split:
-            break
-
-    print("scene names: ", scene_names)
-    return scene_names
-
-
-
-    #selected_samples = [result['ann_info'] for result in results[:AL_split]]
-    # selected_samples = results[:AL_split]
-    # print("entropy selected samples: ", selected_samples)
-
-    # # Select the samples with the highest entropy
-    # return selected_samples
-
-
-
-def single_gpu_test(model, data_loader, sample_tokens):
-    model.eval()
-    results = []
-    dataset = data_loader.dataset
-    prog_bar = mmcv.ProgressBar(len(dataset))
-    for i, data in enumerate(data_loader):
-        with torch.no_grad():
-            result = model(return_loss=False, rescale=True, **data)
-        
-        # Add the sample token to the result
-        for r in result:
-            r['sample'] = sample_tokens[i]
-
-        results.extend(result)
-        batch_size = len(result)
-        for _ in range(batch_size):
-            prog_bar.update()
-    #print("results: ", results)
-    return results
-
-
-
-def inference(cfg_file):
+def config_setup(cfg_file):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--fuse-conv-bn",
@@ -182,15 +82,171 @@ def inference(cfg_file):
 
     cfg = Config(recursive_eval(configs), filename=args.config)
 
-    #dist.init()
+    return cfg, args
 
-    # torch.backends.cudnn.benchmark = True
-    # torch.cuda.set_device(dist.local_rank())
+
+
+def randomQ(random_num, random_labels, seed=None):
+    if seed is not None:
+        random.seed(seed)
+    train = random.sample(list(random_labels), random_num)
+
+    return train
+
+
+
+def run_latest_model():
+    # Get a list of all directories in the directory
+    dirs = [d for d in os.listdir('./checkpoints') if os.path.isdir(os.path.join('./checkpoints', d))]
+
+    # Sort the directories by modification time
+    dirs.sort(key=lambda x: os.path.getmtime(os.path.join('./checkpoints', x)))
+
+    # Get the latest directory
+    latest_dir = dirs[-1]
+
+    return latest_dir
+
+
+def entropyQ(AL_split, cfg_file):
+    
+    #print("results: ", results)
+    results = inference(cfg_file)
+    cfg, args = config_setup(cfg_file)
+     # build the dataloader
+    samples_per_gpu = 1
+    dataset = build_dataset(cfg.data.unlabeled)
+    #print("dataset: ", dataset)
+    data_loader = build_dataloader(
+        dataset,
+        samples_per_gpu=samples_per_gpu,
+        workers_per_gpu=cfg.data.workers_per_gpu,
+        dist=False,
+        shuffle=False,
+    )
+
+    result_files, _ = dataset.format_results(results, jsonfile_prefix)
+
+    print('loading json file')
+    with open(os.path.join(jsonfile_prefix, 'results_nusc.json'), 'r') as f:
+        results = json.loads(f.read())
+
+    # print('len results: ', len(results)) 
+    # print('len keys: ', len(results.keys()))
+    # print('len values: ', len(results.values()))
+    # print('len items: ', len(results.items()))   
+
+
+    sample_tokens = []
+    detection_scores = []
+
+    keys = list(results.keys())
+    values = list(results.values())
+    items = list(results.items())
+    key = keys[1]
+    value = values[1]
+    #item = items[0]
+    print('key name : ', key)
+    #print('items name : ', item)
+    print('value name : ', len(value.items()))
+
+
+    for item in values[1].values():
+        #print('value name : ', item[1]['detection_score'])
+        sample_tokens.append(item[1]['sample_token'])
+        detection_scores.append(item[1]['detection_score'])
+
+
+    #print('sample tokens: ', sample_tokens)
+    #print('detection scores: ', detection_scores)
+
+    print('is loaded')
+    entropys = []
+
+    for detection_score in detection_scores:
+       
+        # Calculate the entropy of the 'detection_scores'
+        probabilities = torch.tensor(detection_score)
+        entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9)).item()
+        entropys.append(entropy)
+
+        #print(f'Entropy of detection_scores: {entropy}')
+    #print('entropys: ', entropys)
+
+    # Initialize an empty list
+    results_list = []
+
+    # Iterate over the sample tokens, detection scores, and entropys
+    for sample_token, detection_score, entropy in zip(sample_tokens, detection_scores, entropys):
+        # Add a new dictionary to the list for each sample token
+        results_list.append({
+            'token': {
+                'sample_token': sample_token,
+                'detection_score': detection_score,
+                'entropy': entropy
+            }
+        })
+
+    # Sort the results_list by entropy in descending order
+    sorted_results_list = sorted(results_list, key=lambda x: x['token']['entropy'], reverse=True)
+
+    #print('Sorted results list: ', sorted_results_list)
+    #____________________________________________________________________________________________________
+
+    scenes = []
+
+    scene_names = []
+
+    for result in sorted_results_list:
+        sample = result['token']['sample_token']
+
+        for token in tokens:
+            if  token.get('token') == sample and token.get('scene_token') not in scenes:
+                scenes.append(token.get('scene_token'))
+
+            # Break the loop if we have found 100 unique scenes
+            if len(scenes) >= AL_split:
+                break
+
+        # Break the outer loop as well
+        if len(scenes) >= AL_split:
+            break
+        
+    for scene in scenes:
+        for scene_token in scene_tokens:
+            if scene_token.get('token') == scene:
+                scene_names.append(scene_token.get('name'))
+                break
+    #print("scene name: ", scene_names) 
+
+
+
+    #print("scene names: ", scenes)
+    return scene_names
+
+
+def single_gpu_test(model, data_loader):
+    model.eval()
+    results = []
+    dataset = data_loader.dataset
+    prog_bar = mmcv.ProgressBar(len(dataset))
+    for i, data in enumerate(data_loader):
+        with torch.no_grad():
+            result = model(return_loss=False, rescale=True, **data)
+
+        results.extend(result)
+        batch_size = len(result)
+        for _ in range(batch_size):
+            prog_bar.update()
+    #print("results: ", results)
+    return results
+
+
+
+def inference(cfg_file):
+    cfg, args = config_setup(cfg_file)
 
     latest = run_latest_model()
-
-    # Initialize the detector
-    #model = init_detector(cfg, f'./checkpoints/{latest}/latest.pth', device='cuda:0')
 
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
@@ -235,9 +291,6 @@ def inference(cfg_file):
         shuffle=False,
     )
 
-    #print("dataset: ", data_loader)
-
-
     # build the model and load checkpoint
     cfg.model.train_cfg = None
     model = build_model(cfg.model, test_cfg=cfg.get("test_cfg"))
@@ -256,7 +309,7 @@ def inference(cfg_file):
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
-        results = single_gpu_test(model, data_loader, sample_tokens)
+        results = single_gpu_test(model, data_loader)
     
     # results = dataset._extract_data(results, cfg.data.unlabeled.pipeline, "interval")
     # print(results)

@@ -43,7 +43,7 @@ def main():
         subset = len(scene_data) - 150
         wandb.init(
             project="BEV-active-Learning",
-            name=f"random_bev_train_{subset}",
+            name=f"entropy_bev_train_{subset}",
             entity="ricenet",
             config=cfg._cfg_dict,
             sync_tensorboard=True,

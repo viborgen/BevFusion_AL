@@ -881,16 +881,16 @@ def run_com():
 
 #______________________________________________________________________________________________________________
 
-# # #make sure file is empty before starting random collection process
+# #make sure file is empty before starting random collection process
 # with open('tools/json_map/train.json', 'wb') as output_file:
 #     pass
 
-# #run original split
-# run(150, query = "random", first_round = True)
+# # #run original split
+# run(100, query = "entropy", first_round = True)
 
 #if error occured in previous run, start with this line and comment out the lines above
 run_com()
 
-# #random samples added per Active Learning round
-for i in range(0, 3):
-    run(50, query = "random", first_round = False)
+#random samples added per Active Learning round
+for i in range(0, 4):
+    run(50, query = "entropy", first_round = False)
