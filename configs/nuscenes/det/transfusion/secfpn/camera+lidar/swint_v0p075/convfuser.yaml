@@ -61,7 +61,7 @@ max_epochs: 6
 
 checkpoint_config:
   interval: 1
-  max_keep_ckpts: 1
+  max_keep_ckpts: 36
   out_dir: './checkpoints'
 
 lr_config:

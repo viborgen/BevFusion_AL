@@ -881,16 +881,36 @@ def run_com():
 
 #______________________________________________________________________________________________________________
 
+# latest = run_latest_chkpnt()
+# command3 = f'torchpack dist-run -np 1 python tools/test.py {cfg} ./checkpoints/{latest}/latest.pth --eval bbox'
+
+#     # # Use Popen to run the command and capture the output
+# process = subprocess.Popen(command3, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+# for line in process.stdout:
+#     if line.startswith('['):
+#         sys.stdout.write('\r' + line.strip())  # Overwrite the current line
+#         sys.stdout.flush()
+#     else:
+#         print(line) 
+
+# # # Wait for the process to finish
+# #return_code = process.wait()  # Wait for the process to finish and get the return code
+# stdout, stderr = process.communicate()  # Wait for the process to finish and get the return code
+
+# if process.returncode != 0:
+#     print(f"Error: Command '{command3}' failed with return code {process.returncode}")
+#     sys.exit(1)  # Stop the loop if an error occurred
+
 # #make sure file is empty before starting random collection process
-# with open('tools/json_map/train.json', 'wb') as output_file:
-#     pass
+#with open('tools/json_map/train.json', 'wb') as output_file:
+#    pass
 
 # # #run original split
-# run(100, query = "entropy", first_round = True)
+#run(350, query = "random", first_round = True)
 
 #if error occured in previous run, start with this line and comment out the lines above
 run_com()
 
 #random samples added per Active Learning round
-for i in range(0, 4):
-    run(50, query = "entropy", first_round = False)
+#for i in range(0, 4):
+#    run(50, query = "random", first_round = False)

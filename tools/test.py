@@ -147,7 +147,7 @@ def main():
 
     wandb.init(
         project="BEV-active-Learning",
-        name=f"entropy_bev_test_{subset}",
+        name=f"random_bev_test_{subset}",
         entity="ricenet",
         config=cfg._cfg_dict,
         sync_tensorboard=True,
